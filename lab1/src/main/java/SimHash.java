@@ -45,9 +45,8 @@ public class SimHash {
     private static String simHash(String text) {
         int[] sh = new int[DIGEST_UTILS.getMessageDigest().getDigestLength() * 8];
         String[] terms = text.split("\\s+");
-        DigestUtils digestUtils = new DigestUtils("MD5");
         for (String term : terms) {
-            String[] hashBin = hexToBinary(digestUtils.digestAsHex(term)).split("");
+            String[] hashBin = hexToBinary(DIGEST_UTILS.digestAsHex(term)).split("");
             for (int i = 0; i < hashBin.length; i++) {
                 if (hashBin[i].equals("1")) {
                     sh[i] += 1;
@@ -86,7 +85,7 @@ public class SimHash {
     }
 
     private static String processQueries() {
-        StringJoiner sj = new StringJoiner("\n");
+        StringJoiner sj = new StringJoiner(System.lineSeparator());
         for (String query : queries) {
             String[] parts = query.split("\\s+");
             int I = Integer.parseInt(parts[0]);
