@@ -1,29 +1,31 @@
 import org.apache.commons.codec.digest.DigestUtils;
 
 import java.math.BigInteger;
-import java.util.Arrays;
-import java.util.Scanner;
-import java.util.StringJoiner;
+import java.util.*;
 import java.util.stream.Collectors;
 
-public class SimHash {
+public class SimHashBuckets {
 
     private static final DigestUtils DIGEST_UTILS = new DigestUtils("MD5");
     private static final int HASH_BIN_LENGTH = DIGEST_UTILS.getMessageDigest().getDigestLength() * 8;
+    private static final int B = 8;
+    private static final int R = HASH_BIN_LENGTH / B;
 
     private static String[] texts;
     private static String[] queries;
     private static String[] hashesHex;
     private static String[] hashesBin;
+    private static Map<Integer, Set<Integer>> candidates;
 
     public static void main(String[] args) {
         readInput();
         hashesHex = Arrays.stream(texts)
-                .map(SimHash::simHash)
+                .map(SimHashBuckets::simHash)
                 .toArray(String[]::new);
         hashesBin = Arrays.stream(hashesHex)
-                .map(SimHash::hexToBinary)
+                .map(SimHashBuckets::hexToBinary)
                 .toArray(String[]::new);
+        lsh();
         String results = processQueries();
         System.out.println(results);
     }
@@ -85,6 +87,61 @@ public class SimHash {
         return s;
     }
 
+    private static void lsh() {
+        candidates = new HashMap<>();
+        // for each region
+        for (int region = 1; region <= B; region++) {
+            // buckets for current region
+            Map<Integer, Set<Integer>> buckets = new HashMap<>();
+            // for each text
+            for (int currentTextId = 0; currentTextId < texts.length; currentTextId++) {
+                String hashBin = hashesBin[currentTextId];
+                // calculate region value
+                int regionValue = hashToInt(region, hashBin);
+                // fetch text ids from current bucket based on region value
+                Set<Integer> bucketTextIds = buckets.get(regionValue);
+                if (bucketTextIds != null) {
+                    // there are some text ids in current bucket,
+                    // so update candidates map
+                    for (int textId : bucketTextIds) {
+                        candidates.merge(currentTextId, new HashSet<>() {{
+                                    add(textId);
+                                }},
+                                (oldValue, newValue) -> {
+                                    oldValue.add(textId);
+                                    return oldValue;
+                                });
+                        int finalCurrentTextId = currentTextId;
+                        candidates.merge(textId, new HashSet<>() {{
+                                    add(finalCurrentTextId);
+                                }},
+                                (oldValue,
+                                 newValue) -> {
+                                    oldValue.add(finalCurrentTextId);
+                                    return oldValue;
+                                });
+                    }
+                } else {
+                    // there are no text ids in current bucket,
+                    // so create a new bucket of text ids
+                    bucketTextIds = new HashSet<>();
+                }
+                // add current text id to current bucket of text ids
+                bucketTextIds.add(currentTextId);
+                // update buckets
+                buckets.put(regionValue, bucketTextIds);
+            }
+        }
+    }
+
+    private static int hashToInt(int region, String hashBin) {
+        // region = 1 -> return 0:(R-1) bits
+        // region = 2 -> return R:2R-1 bits...
+        int startIndex = hashBin.length() - R * region;
+        int endIndex = startIndex + R;
+        return Integer.valueOf(hashBin.substring(startIndex, endIndex), 2);
+    }
+
     private static String processQueries() {
         StringJoiner sj = new StringJoiner(System.lineSeparator());
         for (String query : queries) {
@@ -92,11 +149,8 @@ public class SimHash {
             int I = Integer.parseInt(parts[0]);
             int K = Integer.parseInt(parts[1]);
             int counter = 0;
-            for (int i = 0; i < hashesBin.length; i++) {
-                if (i == I) {
-                    continue;
-                }
-                int distance = hammingDistance(hashesBin[I], hashesBin[i]);
+            for (int candidateId : candidates.get(I)) {
+                int distance = hammingDistance(hashesBin[I], hashesBin[candidateId]);
                 if (distance <= K) {
                     counter++;
                 }
