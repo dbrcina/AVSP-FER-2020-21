@@ -149,10 +149,13 @@ public class SimHashBuckets {
             int I = Integer.parseInt(parts[0]);
             int K = Integer.parseInt(parts[1]);
             int counter = 0;
-            for (int candidateId : candidates.get(I)) {
-                int distance = hammingDistance(hashesBin[I], hashesBin[candidateId]);
-                if (distance <= K) {
-                    counter++;
+            Set<Integer> candidateIds = candidates.get(I);
+            if (candidateIds != null) {
+                for (int candidateId : candidateIds) {
+                    int distance = hammingDistance(hashesBin[I], hashesBin[candidateId]);
+                    if (distance <= K) {
+                        counter++;
+                    }
                 }
             }
             sj.add(String.valueOf(counter));
