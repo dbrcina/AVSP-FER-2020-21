@@ -32,15 +32,15 @@ public class SimHashBuckets {
 
     private static void readInput() {
         try (Scanner sc = new Scanner(System.in)) {
-            int N = Integer.parseInt(sc.nextLine());
+            int N = Integer.parseInt(sc.nextLine().strip());
             texts = new String[N];
             for (int i = 0; i < N; i++) {
-                texts[i] = sc.nextLine();
+                texts[i] = sc.nextLine().strip();
             }
-            int Q = Integer.parseInt(sc.nextLine());
+            int Q = Integer.parseInt(sc.nextLine().strip());
             queries = new String[Q];
             for (int i = 0; i < Q; i++) {
-                queries[i] = sc.nextLine();
+                queries[i] = sc.nextLine().strip();
             }
         }
     }
