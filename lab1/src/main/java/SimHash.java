@@ -1,5 +1,8 @@
 import org.apache.commons.codec.digest.DigestUtils;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -23,19 +26,21 @@ public class SimHash {
 
     private static List<String[]> readInput() {
         List<String[]> inputs = new LinkedList<>();
-        String[] texts;
-        String[] queries;
-        try (Scanner sc = new Scanner(System.in)) {
-            int N = Integer.parseInt(sc.nextLine().strip());
+        String[] texts = null;
+        String[] queries = null;
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
+            int N = Integer.parseInt(br.readLine().strip());
             texts = new String[N];
             for (int i = 0; i < N; i++) {
-                texts[i] = sc.nextLine().strip();
+                texts[i] = br.readLine().strip();
             }
-            int Q = Integer.parseInt(sc.nextLine().strip());
+            int Q = Integer.parseInt(br.readLine().strip());
             queries = new String[Q];
             for (int i = 0; i < Q; i++) {
-                queries[i] = sc.nextLine().strip();
+                queries[i] = br.readLine().strip();
             }
+        } catch (IOException e) {
+            e.printStackTrace();
         }
         inputs.add(texts);
         inputs.add(queries);
