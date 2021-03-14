@@ -11,26 +11,22 @@ public class SimHashBuckets {
     private static final int B = 8;
     private static final int R = HASH_BIN_LENGTH / B;
 
-    private static String[] texts;
-    private static String[] queries;
-    private static String[] hashesHex;
-    private static String[] hashesBin;
-    private static Map<Integer, Set<Integer>> candidates;
-
     public static void main(String[] args) {
-        readInput();
-        hashesHex = Arrays.stream(texts)
+        // Linked list: texts -> queries
+        List<String[]> inputs = readInput();
+        // inputs.remove(0) removes and returns texts and so on...
+        String[] hashes = Arrays.stream(inputs.remove(0))
                 .map(SimHashBuckets::simHash)
-                .toArray(String[]::new);
-        hashesBin = Arrays.stream(hashesHex)
                 .map(SimHashBuckets::hexToBinary)
                 .toArray(String[]::new);
-        lsh();
-        String results = processQueries();
-        System.out.println(results);
+        Arrays.stream(processQueries(inputs.remove(0), hashes, lsh(hashes)))
+                .forEach(System.out::println);
     }
 
-    private static void readInput() {
+    private static List<String[]> readInput() {
+        List<String[]> inputs = new LinkedList<>();
+        String[] texts;
+        String[] queries;
         try (Scanner sc = new Scanner(System.in)) {
             int N = Integer.parseInt(sc.nextLine().strip());
             texts = new String[N];
@@ -43,6 +39,9 @@ public class SimHashBuckets {
                 queries[i] = sc.nextLine().strip();
             }
         }
+        inputs.add(texts);
+        inputs.add(queries);
+        return inputs;
     }
 
     private static String simHash(String text) {
@@ -87,15 +86,15 @@ public class SimHashBuckets {
         return s;
     }
 
-    private static void lsh() {
-        candidates = new HashMap<>();
+    private static Map<Integer, Set<Integer>> lsh(String[] hashes) {
+        Map<Integer, Set<Integer>> candidates = new HashMap<>();
         // for each region
         for (int region = 1; region <= B; region++) {
             // buckets for current region
             Map<Integer, Set<Integer>> buckets = new HashMap<>();
             // for each text
-            for (int currentTextId = 0; currentTextId < texts.length; currentTextId++) {
-                String hashBin = hashesBin[currentTextId];
+            for (int currentTextId = 0; currentTextId < hashes.length; currentTextId++) {
+                String hashBin = hashes[currentTextId];
                 // calculate region value
                 int regionValue = hashToInt(region, hashBin);
                 // fetch text ids from current bucket based on region value
@@ -132,6 +131,7 @@ public class SimHashBuckets {
                 buckets.put(regionValue, bucketTextIds);
             }
         }
+        return candidates;
     }
 
     private static int hashToInt(int region, String hashBin) {
@@ -142,9 +142,11 @@ public class SimHashBuckets {
         return Integer.valueOf(hashBin.substring(startIndex, endIndex), 2);
     }
 
-    private static String processQueries() {
-        StringJoiner sj = new StringJoiner(System.lineSeparator());
-        for (String query : queries) {
+    private static int[] processQueries(String[] queries, String[] hashes, Map<Integer, Set<Integer>> candidates) {
+        int[] results = new int[queries.length];
+        Map<String, Integer> distancesCache = new HashMap<>();
+        for (int i = 0; i < queries.length; i++) {
+            String query = queries[i];
             String[] parts = query.split("\\s+");
             int I = Integer.parseInt(parts[0]);
             int K = Integer.parseInt(parts[1]);
@@ -152,15 +154,20 @@ public class SimHashBuckets {
             Set<Integer> candidateIds = candidates.get(I);
             if (candidateIds != null) {
                 for (int candidateId : candidateIds) {
-                    int distance = hammingDistance(hashesBin[I], hashesBin[candidateId]);
+                    String key = "" + Math.min(I, candidateId) + "," + Math.max(I, candidateId);
+                    Integer distance = distancesCache.get(key);
+                    if (distance == null) {
+                        distance = hammingDistance(hashes[I], hashes[candidateId]);
+                        distancesCache.put(key, distance);
+                    }
                     if (distance <= K) {
                         counter++;
                     }
                 }
             }
-            sj.add(String.valueOf(counter));
+            results[i] = counter;
         }
-        return sj.toString();
+        return results;
     }
 
     private static int hammingDistance(String s1, String s2) {

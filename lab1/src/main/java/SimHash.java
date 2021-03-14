@@ -1,9 +1,7 @@
 import org.apache.commons.codec.digest.DigestUtils;
 
 import java.math.BigInteger;
-import java.util.Arrays;
-import java.util.Scanner;
-import java.util.StringJoiner;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class SimHash {
@@ -11,24 +9,22 @@ public class SimHash {
     private static final DigestUtils DIGEST_UTILS = new DigestUtils("MD5");
     private static final int HASH_BIN_LENGTH = DIGEST_UTILS.getMessageDigest().getDigestLength() * 8;
 
-    private static String[] texts;
-    private static String[] queries;
-    private static String[] hashesHex;
-    private static String[] hashesBin;
-
     public static void main(String[] args) {
-        readInput();
-        hashesHex = Arrays.stream(texts)
+        // Linked list: texts -> queries
+        List<String[]> inputs = readInput();
+        // inputs.remove(0) removes and returns texts and so on...
+        String[] hashes = Arrays.stream(inputs.remove(0))
                 .map(SimHash::simHash)
-                .toArray(String[]::new);
-        hashesBin = Arrays.stream(hashesHex)
                 .map(SimHash::hexToBinary)
                 .toArray(String[]::new);
-        String results = processQueries();
-        System.out.println(results);
+        Arrays.stream(processQueries(inputs.remove(0), hashes))
+                .forEach(System.out::println);
     }
 
-    private static void readInput() {
+    private static List<String[]> readInput() {
+        List<String[]> inputs = new LinkedList<>();
+        String[] texts;
+        String[] queries;
         try (Scanner sc = new Scanner(System.in)) {
             int N = Integer.parseInt(sc.nextLine().strip());
             texts = new String[N];
@@ -41,6 +37,9 @@ public class SimHash {
                 queries[i] = sc.nextLine().strip();
             }
         }
+        inputs.add(texts);
+        inputs.add(queries);
+        return inputs;
     }
 
     private static String simHash(String text) {
@@ -85,25 +84,32 @@ public class SimHash {
         return s;
     }
 
-    private static String processQueries() {
-        StringJoiner sj = new StringJoiner(System.lineSeparator());
-        for (String query : queries) {
+    private static int[] processQueries(String[] queries, String[] hashes) {
+        int[] results = new int[queries.length];
+        Map<String, Integer> distancesCache = new HashMap<>();
+        for (int i = 0; i < queries.length; i++) {
+            String query = queries[i];
             String[] parts = query.split("\\s+");
             int I = Integer.parseInt(parts[0]);
             int K = Integer.parseInt(parts[1]);
             int counter = 0;
-            for (int i = 0; i < hashesBin.length; i++) {
-                if (i == I) {
+            for (int j = 0; j < hashes.length; j++) {
+                if (j == I) {
                     continue;
                 }
-                int distance = hammingDistance(hashesBin[I], hashesBin[i]);
+                String key = "" + Math.min(I, j) + "," + Math.max(I, j);
+                Integer distance = distancesCache.get(key);
+                if (distance == null) {
+                    distance = hammingDistance(hashes[I], hashes[j]);
+                    distancesCache.put(key, distance);
+                }
                 if (distance <= K) {
                     counter++;
                 }
             }
-            sj.add(String.valueOf(counter));
+            results[i] = counter;
         }
-        return sj.toString();
+        return results;
     }
 
     private static int hammingDistance(String s1, String s2) {
