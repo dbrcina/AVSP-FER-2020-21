@@ -48,19 +48,20 @@ public class SimHashBuckets {
 
     private static int[][] prepareHashes(String[] texts) {
         int[][] hashes = new int[texts.length][];
-        Map<String, byte[]> digestsCache = new HashMap<>();
+        Map<String, char[]> hashBinCache = new HashMap<>();
         for (int i = 0; i < hashes.length; i++) {
-            hashes[i] = simHash(texts[i], digestsCache);
+            hashes[i] = simHash(texts[i], hashBinCache);
         }
         return hashes;
     }
 
-    private static int[] simHash(String text, Map<String, byte[]> digestsCache) {
+    private static int[] simHash(String text, Map<String, char[]> hashBinCache) {
         int[] sh = new int[HASH_BIN_LENGTH];
         String[] terms = text.split("\\s+");
         for (String term : terms) {
-            byte[] digest = digestsCache.computeIfAbsent(term, k -> DIGEST_UTILS.digest(term));
-            char[] hashBinChars = BinaryCodec.toAsciiString(digest).toCharArray();
+            char[] hashBinChars = hashBinCache.computeIfAbsent(
+                    term, k -> BinaryCodec.toAsciiString(DIGEST_UTILS.digest(term)).toCharArray()
+            );
             for (int i = 0; i < hashBinChars.length; i++) {
                 if (hashBinChars[i] == '1') {
                     sh[i] += 1;
