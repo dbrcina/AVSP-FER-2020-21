@@ -15,9 +15,7 @@ public class SimHash {
         // Linked list: texts -> queries
         List<String[]> inputs = readInput();
         // inputs.remove(0) removes and returns texts and so on...
-        int[][] hashes = Arrays.stream(inputs.remove(0))
-                .map(SimHash::simHash)
-                .toArray(int[][]::new);
+        int[][] hashes = prepareHashes(inputs.remove(0));
         Arrays.stream(processQueries(inputs.remove(0), hashes))
                 .forEach(System.out::println);
     }
@@ -45,11 +43,20 @@ public class SimHash {
         return inputs;
     }
 
-    private static int[] simHash(String text) {
+    private static int[][] prepareHashes(String[] texts) {
+        int[][] hashes = new int[texts.length][];
+        Map<String, byte[]> digestsCache = new HashMap<>();
+        for (int i = 0; i < hashes.length; i++) {
+            hashes[i] = simHash(texts[i], digestsCache);
+        }
+        return hashes;
+    }
+
+    private static int[] simHash(String text, Map<String, byte[]> digestsCache) {
         int[] sh = new int[HASH_BIN_LENGTH];
         String[] terms = text.split("\\s+");
         for (String term : terms) {
-            byte[] digest = DIGEST_UTILS.digest(term);
+            byte[] digest = digestsCache.computeIfAbsent(term, k -> DIGEST_UTILS.digest(term));
             char[] hashBinChars = BinaryCodec.toAsciiString(digest).toCharArray();
             for (int i = 0; i < hashBinChars.length; i++) {
                 if (hashBinChars[i] == '1') {
