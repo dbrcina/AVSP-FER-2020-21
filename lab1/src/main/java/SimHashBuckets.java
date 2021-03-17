@@ -77,7 +77,6 @@ public class SimHashBuckets {
             Map<Integer, Set<Integer>> buckets = new HashMap<>();
             // for each text
             for (int currentTextId = 0; currentTextId < hashes.length; currentTextId++) {
-                int[] hashAsInt = hashes[currentTextId];
                 // calculate band value
                 int bandValue = hashToInt(band, hashesAsStrings[currentTextId]);
                 // fetch text ids from current bucket based on band value
