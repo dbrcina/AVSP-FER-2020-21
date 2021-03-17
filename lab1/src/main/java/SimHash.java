@@ -1,11 +1,10 @@
+import org.apache.commons.codec.binary.BinaryCodec;
 import org.apache.commons.codec.digest.DigestUtils;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.math.BigInteger;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class SimHash {
 
@@ -16,10 +15,9 @@ public class SimHash {
         // Linked list: texts -> queries
         List<String[]> inputs = readInput();
         // inputs.remove(0) removes and returns texts and so on...
-        String[] hashes = Arrays.stream(inputs.remove(0))
+        int[][] hashes = Arrays.stream(inputs.remove(0))
                 .map(SimHash::simHash)
-                .map(SimHash::hexToBinary)
-                .toArray(String[]::new);
+                .toArray(int[][]::new);
         Arrays.stream(processQueries(inputs.remove(0), hashes))
                 .forEach(System.out::println);
     }
@@ -47,13 +45,14 @@ public class SimHash {
         return inputs;
     }
 
-    private static String simHash(String text) {
+    private static int[] simHash(String text) {
         int[] sh = new int[HASH_BIN_LENGTH];
         String[] terms = text.split("\\s+");
         for (String term : terms) {
-            String[] hashBin = hexToBinary(DIGEST_UTILS.digestAsHex(term)).split("");
-            for (int i = 0; i < hashBin.length; i++) {
-                if (hashBin[i].equals("1")) {
+            byte[] digest = DIGEST_UTILS.digest(term);
+            char[] hashBinChars = BinaryCodec.toAsciiString(digest).toCharArray();
+            for (int i = 0; i < hashBinChars.length; i++) {
+                if (hashBinChars[i] == '1') {
                     sh[i] += 1;
                 } else {
                     sh[i] -= 1;
@@ -63,33 +62,10 @@ public class SimHash {
         for (int i = 0; i < sh.length; i++) {
             sh[i] = sh[i] >= 0 ? 1 : 0;
         }
-        String binary = Arrays.stream(sh)
-                .mapToObj(String::valueOf)
-                .collect(Collectors.joining());
-        return addPadding(new BigInteger(binary, 2).toString(16), sh.length);
+        return sh;
     }
 
-    // Stackoverflow: https://stackoverflow.com/a/41707271
-    private static String hexToBinary(String hex) {
-        int len = hex.length() * 4;
-        String bin = new BigInteger(hex, 16).toString(2);
-        return addPadding(bin, len);
-    }
-
-    // Left pad the string result with 0s if converting to BigInteger removes them.
-    private static String addPadding(String s, int len) {
-        int diff = len - s.length();
-        if (diff != 0) {
-            String pad = "";
-            for (int i = 0; i < diff; ++i) {
-                pad = pad.concat("0");
-            }
-            s = pad.concat(s);
-        }
-        return s;
-    }
-
-    private static int[] processQueries(String[] queries, String[] hashes) {
+    private static int[] processQueries(String[] queries, int[][] hashes) {
         int[] results = new int[queries.length];
         Map<String, Integer> distancesCache = new HashMap<>();
         for (int i = 0; i < queries.length; i++) {
@@ -103,11 +79,10 @@ public class SimHash {
                     continue;
                 }
                 String key = "" + Math.min(I, j) + "," + Math.max(I, j);
-                Integer distance = distancesCache.get(key);
-                if (distance == null) {
-                    distance = hammingDistance(hashes[I], hashes[j]);
-                    distancesCache.put(key, distance);
-                }
+                int finalJ = j;
+                Integer distance = distancesCache.computeIfAbsent(
+                        key, k -> hammingDistance(hashes[I], hashes[finalJ])
+                );
                 if (distance <= K) {
                     counter++;
                 }
@@ -117,13 +92,13 @@ public class SimHash {
         return results;
     }
 
-    private static int hammingDistance(String s1, String s2) {
+    private static int hammingDistance(int[] h1, int[] h2) {
         int counter = 0;
-        if (s1.length() != s2.length()) {
+        if (h1.length != h2.length) {
             throw new RuntimeException("Binaries have different length!");
         }
-        for (int i = 0; i < s1.length(); i++) {
-            if (s1.charAt(i) != s2.charAt(i)) {
+        for (int i = 0; i < h1.length; i++) {
+            if (h1[i] != h2[i]) {
                 counter++;
             }
         }
