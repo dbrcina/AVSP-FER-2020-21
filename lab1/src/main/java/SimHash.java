@@ -12,12 +12,14 @@ public class SimHash {
     private static final int HASH_BIN_LENGTH = DIGEST_UTILS.getMessageDigest().getDigestLength() * 8;
 
     public static void main(String[] args) {
+        long start = System.nanoTime();
         // Linked list: texts -> queries
         List<String[]> inputs = readInput();
         // inputs.remove(0) removes and returns texts and so on...
         int[][] hashes = prepareHashes(inputs.remove(0));
         Arrays.stream(processQueries(inputs.remove(0), hashes))
                 .forEach(System.out::println);
+        System.err.println((System.nanoTime() - start) * 1e-9);
     }
 
     private static List<String[]> readInput() {
