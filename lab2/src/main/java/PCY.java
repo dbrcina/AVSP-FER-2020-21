@@ -49,7 +49,7 @@ public class PCY {
                 for (String part : parts) {
                     int item = Integer.parseInt(part);
                     basket.add(item);
-                    int frequency = ITEMS_FREQUENCIES.merge(item, 1, (oldV, value) -> oldV + 1);
+                    int frequency = ITEMS_FREQUENCIES.merge(item, 1, Integer::sum);
                     if (frequency >= threshold) {
                         FREQUENT_ITEMS.add(item);
                     }
