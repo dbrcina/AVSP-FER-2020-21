@@ -26,7 +26,7 @@ public class PCY {
         PAIRS_SUMS.values().stream()
                 .sorted(Collections.reverseOrder())
                 .forEach(v -> sb.append(v).append(LINE_SEP));
-        sb.setLength(sb.length() - 2);
+        sb.setLength(sb.length() - 1);
         System.out.println(sb.toString());
         System.err.printf(Locale.US, "Runtime: %.6fs%n", (System.nanoTime() - start) * 1e-9);
     }
