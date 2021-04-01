@@ -5,6 +5,17 @@ import java.util.*;
 
 public class PCY {
 
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            final long start = System.nanoTime();
+
+            @Override
+            public void run() {
+                System.err.printf(Locale.US, "Runtime: %.6fs%n", (System.nanoTime() - start) * 1e-9);
+            }
+        }));
+    }
+
     private static final String LINE_SEP = System.lineSeparator();
     private static final Map<Integer, Integer> ITEMS_FREQUENCIES = new HashMap<>();
     private static final Set<Integer> FREQUENT_ITEMS = new HashSet<>();
@@ -15,7 +26,6 @@ public class PCY {
     private static List<List<Integer>> baskets;
 
     public static void main(String[] args) throws IOException {
-        long start = System.nanoTime();
         readInput();
         hashPairs();
         countPairs();
@@ -28,7 +38,6 @@ public class PCY {
                 .forEach(v -> sb.append(v).append(LINE_SEP));
         sb.setLength(sb.length() - LINE_SEP.length());
         System.out.println(sb.toString());
-        System.err.printf(Locale.US, "Runtime: %.6fs%n", (System.nanoTime() - start) * 1e-9);
     }
 
     private static void readInput() throws IOException {
