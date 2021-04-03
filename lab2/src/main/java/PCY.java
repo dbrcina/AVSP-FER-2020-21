@@ -21,9 +21,11 @@ public class PCY {
     private static final Set<Integer> FREQUENT_ITEMS = new HashSet<>();
     private static final Map<IntPair, Integer> PAIRS_SUMS = new HashMap<>();
 
-    private static double threshold;
-    private static int[] buckets;
     private static List<List<Integer>> baskets;
+    private static double threshold;
+    private static int numOfBuckets;
+    private static int[] buckets;
+    private static int numOfItems;
 
     public static void main(String[] args) throws IOException {
         readInput();
@@ -48,7 +50,8 @@ public class PCY {
             // Read s and calculate threshold.
             threshold = Double.parseDouble(br.readLine().strip()) * numOfBaskets;
             // Read the number of buckets.
-            buckets = new int[Integer.parseInt(br.readLine().strip())];
+            numOfBuckets = Integer.parseInt(br.readLine().strip());
+            buckets = new int[numOfBuckets];
             // Read every bucket.
             String line;
             while ((line = br.readLine()) != null) {
@@ -66,11 +69,10 @@ public class PCY {
                 baskets.add(basket);
             }
         }
+        numOfItems = ITEMS_FREQUENCIES.size();
     }
 
     private static void hashPairs() {
-        int numOfItems = ITEMS_FREQUENCIES.size();
-        int numOfBuckets = buckets.length;
         for (List<Integer> basket : baskets) {
             for (int i = 0; i < basket.size() - 1; i++) {
                 int ithItem = basket.get(i);
@@ -86,8 +88,6 @@ public class PCY {
     }
 
     private static void countPairs() {
-        int numOfItems = ITEMS_FREQUENCIES.size();
-        int numOfBuckets = buckets.length;
         for (List<Integer> basket : baskets) {
             for (int i = 0; i < basket.size() - 1; i++) {
                 int ithItem = basket.get(i);
