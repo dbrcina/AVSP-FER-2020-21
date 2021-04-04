@@ -36,6 +36,7 @@ public class PCY {
         sb.append(m * (m - 1) / 2).append(LINE_SEP);
         sb.append(PAIRS_SUMS.size()).append(LINE_SEP);
         PAIRS_SUMS.values().stream()
+                .filter(sum -> sum >= threshold)
                 .sorted(Collections.reverseOrder())
                 .forEach(v -> sb.append(v).append(LINE_SEP));
         sb.setLength(sb.length() - LINE_SEP.length());
