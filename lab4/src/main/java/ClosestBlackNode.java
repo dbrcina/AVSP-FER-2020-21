@@ -1,8 +1,8 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Arrays;
-import java.util.Locale;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class ClosestBlackNode {
 
@@ -43,10 +43,43 @@ public class ClosestBlackNode {
         }
     }
 
+    private static class IntPair {
+
+        private int v1;
+        private int v2;
+
+        private IntPair() {
+        }
+
+        @Override
+        public String toString() {
+            return "(%d, %d)".formatted(v1, v2);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof IntPair)) return false;
+            IntPair intPair = (IntPair) o;
+            return v1 == intPair.v1 && v2 == intPair.v2;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(v1, v2);
+        }
+
+        private static IntPair of(int v1, int v2) {
+            IntPair pair = new IntPair();
+            pair.v1 = v1;
+            pair.v2 = v2;
+            return pair;
+        }
+    }
+
     private static int n;
-    private static int e;
-    private static NodeType[] nodes;
-    private static int[][] edges;
+    private static NodeType[] nodeTypes;
+    private static List<Set<Integer>> adjacencyMatrix;
     private static int[][] distances;
 
     public static void main(String[] args) throws IOException {
@@ -61,33 +94,55 @@ public class ClosestBlackNode {
             // Parse n and e.
             int[] parts = parseLine(br);
             n = parts[0];
-            e = parts[1];
+            int e = parts[1];
             // Parse node types.
-            nodes = new NodeType[n];
+            nodeTypes = new NodeType[n];
             for (int i = 0; i < n; i++) {
-                nodes[i] = NodeType.forType(parseLine(br)[0]);
+                nodeTypes[i] = NodeType.forType(parseLine(br)[0]);
             }
             // Parse edges.
-            edges = new int[e][];
+            adjacencyMatrix = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                adjacencyMatrix.add(new HashSet<>());
+            }
             for (int i = 0; i < e; i++) {
-                edges[i] = parseLine(br);
+                int[] nodes = parseLine(br);
+                int n1 = nodes[0];
+                int n2 = nodes[1];
+                adjacencyMatrix.get(n1).add(n2);
+                adjacencyMatrix.get(n2).add(n1);
             }
         }
     }
 
     private static void calculateDistances() {
         distances = new int[n][];
+        Set<Integer> deadNodes = new HashSet<>();
         for (int i = 0; i < n; i++) {
-            if (nodes[i] == NodeType.BLACK) {
-                distances[i] = new int[]{i, 0};
-                continue;
-            }
-            for (int[] edge : edges) {
-                if (edge[0] == i) {
-
-                }
+            IntPair result = findClosestBN(0, new TreeSet<>(Set.of(i)), new BitSet(n), deadNodes);
+            distances[i] = new int[]{result.v1, result.v2};
+            if (result.v1 == NODE_NOT_FOUND) {
+                deadNodes.add(i);
             }
         }
+    }
+
+    private static IntPair findClosestBN(int dist, SortedSet<Integer> open, BitSet visited, Set<Integer> deadNodes) {
+        if (dist > MAX_DISTANCE || open.size() == 0) {
+            return IntPair.of(NODE_NOT_FOUND, NODE_NOT_FOUND);
+        }
+        SortedSet<Integer> nextOpen = new TreeSet<>();
+        for (int node : open) {
+            if (nodeTypes[node] == NodeType.BLACK) {
+                return IntPair.of(node, dist);
+            }
+            visited.set(node);
+            nextOpen.addAll(adjacencyMatrix.get(node).stream()
+                    .filter(i -> !visited.get(i) && !open.contains(i) && !deadNodes.contains(i))
+                    .collect(Collectors.toList())
+            );
+        }
+        return findClosestBN(dist + 1, nextOpen, visited, deadNodes);
     }
 
     private static void prepareResults() {
