@@ -1,6 +1,5 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -20,13 +19,26 @@ public class ClosestBlackNode {
     private static final String SPLIT_DEL = "\\s+";
     private static final int MAX_DISTANCE = 10;
     private static final int NODE_NOT_FOUND = -1;
-    private static final StringBuilder RESULTS = new StringBuilder();
-    private static final String LINE_SEP = System.lineSeparator();
+
+    private static class DataModel {
+        private final int n;
+        private final NodeType[] nodeTypes;
+        private final List<List<Integer>> adjacencyMatrix;
+        private final int[][] results;
+
+        private DataModel(int n, NodeType[] nodeTypes, List<List<Integer>> adjacencyMatrix) {
+            this.n = n;
+            this.nodeTypes = nodeTypes;
+            this.adjacencyMatrix = adjacencyMatrix;
+            this.results = new int[n][];
+        }
+    }
 
     private enum NodeType {
         WHITE(0),
         BLACK(1);
 
+        private final static NodeType[] values = values();
         private final int type;
 
         NodeType(int type) {
@@ -34,7 +46,7 @@ public class ClosestBlackNode {
         }
 
         private static NodeType forType(int type) {
-            for (NodeType nodeType : values()) {
+            for (NodeType nodeType : values) {
                 if (nodeType.type == type) {
                     return nodeType;
                 }
@@ -44,29 +56,10 @@ public class ClosestBlackNode {
     }
 
     private static class IntPair {
-
         private int v1;
         private int v2;
 
         private IntPair() {
-        }
-
-        @Override
-        public String toString() {
-            return "(%d, %d)".formatted(v1, v2);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof IntPair)) return false;
-            IntPair intPair = (IntPair) o;
-            return v1 == intPair.v1 && v2 == intPair.v2;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(v1, v2);
         }
 
         private static IntPair of(int v1, int v2) {
@@ -77,87 +70,92 @@ public class ClosestBlackNode {
         }
     }
 
-    private static int n;
-    private static NodeType[] nodeTypes;
-    private static List<Set<Integer>> adjacencyMatrix;
-    private static int[][] distances;
-
     public static void main(String[] args) throws IOException {
-        parseInput();
-        calculateDistances();
-        prepareResults();
-        System.out.println(RESULTS);
-    }
-
-    private static void parseInput() throws IOException {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
-            // Parse n and e.
-            int[] parts = parseLine(br);
-            n = parts[0];
-            int e = parts[1];
-            // Parse node types.
-            nodeTypes = new NodeType[n];
-            for (int i = 0; i < n; i++) {
-                nodeTypes[i] = NodeType.forType(parseLine(br)[0]);
-            }
-            // Parse edges.
-            adjacencyMatrix = new ArrayList<>(n);
-            for (int i = 0; i < n; i++) {
-                adjacencyMatrix.add(new HashSet<>());
-            }
-            for (int i = 0; i < e; i++) {
-                int[] nodes = parseLine(br);
-                int n1 = nodes[0];
-                int n2 = nodes[1];
-                adjacencyMatrix.get(n1).add(n2);
-                adjacencyMatrix.get(n2).add(n1);
+        DataModel dataModel = parseInput();
+        calculateDistances(dataModel);
+        try (OutputStream os = new BufferedOutputStream(System.out)) {
+            int[][] results = dataModel.results;
+            for (int[] result : results) {
+                os.write(String.format("%d %d%n", result[0], result[1]).getBytes(StandardCharsets.UTF_8));
             }
         }
     }
 
-    private static void calculateDistances() {
-        distances = new int[n][];
+    private static DataModel parseInput() throws IOException {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
+            // Parse n and e.
+            int[] parts = parseLine(br);
+            int n = parts[0];
+            int e = parts[1];
+            // Parse node types.
+            NodeType[] nodeTypes = new NodeType[n];
+            for (int i = 0; i < n; i++) {
+                nodeTypes[i] = NodeType.forType(parseLine(br)[0]);
+            }
+            // Parse edges.
+            List<List<Integer>> adjacencyMatrix = new ArrayList<>(n);
+            for (int i = 0; i < n; i++) {
+                adjacencyMatrix.add(new ArrayList<>());
+            }
+            for (int i = 0; i < e; i++) {
+                int[] nodes = parseLine(br);
+                int si = nodes[0];
+                int di = nodes[1];
+                adjacencyMatrix.get(si).add(di);
+                adjacencyMatrix.get(di).add(si);
+            }
+            return new DataModel(n, nodeTypes, adjacencyMatrix);
+        }
+    }
+
+    private static void calculateDistances(DataModel dataModel) {
+        int n = dataModel.n;
+        NodeType[] nodeTypes = dataModel.nodeTypes;
+        List<List<Integer>> adjacencyMatrix = dataModel.adjacencyMatrix;
+        int[][] results = dataModel.results;
         Set<Integer> deadNodes = new HashSet<>();
         for (int i = 0; i < n; i++) {
-            IntPair result = findClosestBN(0, new TreeSet<>(Set.of(i)), new BitSet(n), deadNodes);
-            distances[i] = new int[]{result.v1, result.v2};
+            PriorityQueue<Integer> open = new PriorityQueue<>();
+            open.add(i);
+            IntPair result = findClosestBN(0, open, new HashSet<>(), deadNodes, nodeTypes, adjacencyMatrix);
+            results[i] = new int[]{result.v1, result.v2};
             if (result.v1 == NODE_NOT_FOUND) {
                 deadNodes.add(i);
             }
         }
     }
 
-    private static IntPair findClosestBN(int dist, SortedSet<Integer> open, BitSet visited, Set<Integer> deadNodes) {
+    private static IntPair findClosestBN(
+            int dist,
+            PriorityQueue<Integer> open,
+            Set<Integer> visited,
+            Set<Integer> deadNodes,
+            NodeType[] nodeTypes,
+            List<List<Integer>> adjacencyMatrix) {
         if (dist > MAX_DISTANCE || open.size() == 0) {
             return IntPair.of(NODE_NOT_FOUND, NODE_NOT_FOUND);
         }
-        SortedSet<Integer> nextOpen = new TreeSet<>();
-        for (int node : open) {
-            if (nodeTypes[node] == NodeType.BLACK) {
-                return IntPair.of(node, dist);
-            }
-            visited.set(node);
+        PriorityQueue<Integer> nextOpen = new PriorityQueue<>();
+        while (!open.isEmpty()) {
+            int node = open.poll();
+            if (nodeTypes[node] == NodeType.BLACK) return IntPair.of(node, dist);
+            visited.add(node);
             nextOpen.addAll(adjacencyMatrix.get(node).stream()
-                    .filter(i -> !visited.get(i) && !open.contains(i) && !deadNodes.contains(i))
+                    .filter(child -> !visited.contains(child) && !open.contains(child) && !deadNodes.contains(child))
                     .collect(Collectors.toList())
             );
         }
-        return findClosestBN(dist + 1, nextOpen, visited, deadNodes);
-    }
-
-    private static void prepareResults() {
-        Arrays.stream(distances).forEach(d -> RESULTS.append(String.format("%d %d%n", d[0], d[1])));
-        RESULTS.setLength(RESULTS.length() - LINE_SEP.length());
-    }
-
-    private static String[] readLineAndSplit(BufferedReader br) throws IOException {
-        return br.readLine().strip().split(SPLIT_DEL);
+        return findClosestBN(dist + 1, nextOpen, visited, deadNodes, nodeTypes, adjacencyMatrix);
     }
 
     private static int[] parseLine(BufferedReader br) throws IOException {
         return Arrays.stream(readLineAndSplit(br))
                 .mapToInt(Integer::parseInt)
                 .toArray();
+    }
+
+    private static String[] readLineAndSplit(BufferedReader br) throws IOException {
+        return br.readLine().strip().split(SPLIT_DEL);
     }
 
 }

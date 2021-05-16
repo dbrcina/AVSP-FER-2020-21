@@ -1,6 +1,5 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -21,8 +20,6 @@ public class NodeRank {
 
     private static final String SPLIT_DEL = "\\s+";
     private static final int N_ITERATIONS = 100;
-    private static final StringBuilder SB = new StringBuilder();
-    private static final String LINE_SEP = System.lineSeparator();
 
     private static class DataModel {
         private final int n;
@@ -55,9 +52,12 @@ public class NodeRank {
     public static void main(String[] args) throws IOException {
         DataModel dataModel = parseInput();
         processQueries(dataModel);
-        Arrays.stream(dataModel.results).forEach(result -> SB.append(String.format(Locale.US, "%.10f%n", result)));
-        SB.setLength(SB.length() - LINE_SEP.length());
-        System.out.println(SB);
+        try (OutputStream os = new BufferedOutputStream(System.out)) {
+            double[] results = dataModel.results;
+            for (double result : results) {
+                os.write(String.format(Locale.US, "%.10f%n", result).getBytes(StandardCharsets.UTF_8));
+            }
+        }
     }
 
     private static DataModel parseInput() throws IOException {
@@ -80,8 +80,9 @@ public class NodeRank {
             // Parse queries.
             for (int i = 0; i < q; i++) {
                 int[] parsedData = parseLine(br);
-                Query query = new Query(i, parsedData[0], parsedData[1] - 1);
-                queriesPerIterations.get(query.ti).add(query);
+                int ti = parsedData[1] - 1;
+                Query query = new Query(i, parsedData[0], ti);
+                queriesPerIterations.get(ti).add(query);
             }
             return new DataModel(n, beta, adjacencyList, queriesPerIterations);
         }
@@ -106,21 +107,21 @@ public class NodeRank {
                     newRanks[connection] += rank;
                 }
             }
-            previousRanks = newRanks;
             for (Query query : queries) {
                 results[query.id] = newRanks[query.ni];
             }
+            previousRanks = newRanks;
         }
-    }
-
-    private static String[] readLineAndSplit(BufferedReader br) throws IOException {
-        return br.readLine().strip().split(SPLIT_DEL);
     }
 
     private static int[] parseLine(BufferedReader br) throws IOException {
         return Arrays.stream(readLineAndSplit(br))
                 .mapToInt(Integer::parseInt)
                 .toArray();
+    }
+
+    private static String[] readLineAndSplit(BufferedReader br) throws IOException {
+        return br.readLine().strip().split(SPLIT_DEL);
     }
 
 }
