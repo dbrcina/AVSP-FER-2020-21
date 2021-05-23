@@ -17,42 +17,61 @@ public class GNAlgorithm {
     }
 
     public static void main(String[] args) throws IOException {
-        Map<Integer, Node> nodesMap = readInput();
-        calculateEdgeWeights(nodesMap);
-        girvanNewman(nodesMap);
+        TaskModel model = readInput();
+        calculateEdgeWeights(model);
+        girvanNewman(model);
         System.out.println();
     }
 
-    private static void girvanNewman(Map<Integer, Node> nodesMap) {
-        Collection<Node> nodes = nodesMap.values();
-        for (Node n1 : nodes) {
-            int id1 = n1.id;
-            for (Node n2 : nodes) {
-                int id2 = n2.id;
-                if (id1 == id2) continue;
-                Collection<Collection<Edge>> shortestPaths = new ArrayList<>();
-                findShortestPaths(id2, 0, n1.edgesMap.values(), shortestPaths);
+    private static void girvanNewman(TaskModel model) {
+        Map<Integer, Node> nodesMap = model.nodesMap;
+        Set<Integer> nodesIds = nodesMap.keySet();
+        Map<Integer, Collection<Edge>> adjacencyMatrix = model.adjacencyMatrix;
+        Collection<Edge> edges = model.edges;
+        Map<IntPair, Collection<Collection<Edge>>> allPathsBetweenTwoNodes = new HashMap<>();
+        for (int n1 : nodesIds) {
+            for (int n2 : nodesIds) {
+                if (n1 == n2) continue;
+                IntPair pair = new IntPair(Math.min(n1, n2), Math.max(n1, n2));
+                if (allPathsBetweenTwoNodes.containsKey(pair)) continue;
+                Collection<Collection<Edge>> results = new ArrayList<>();
+                findShortestPaths(n1, n2, adjacencyMatrix, new HashSet<>(), results, new ArrayList<>());
+                allPathsBetweenTwoNodes.put(pair, results);
             }
         }
+        System.out.println();
     }
 
     private static void findShortestPaths(
-            int destinationId,
-            int d,
-            Collection<Edge> open,
-            Collection<Collection<Edge>> shortestPaths) {
-
+            int src,
+            int dest,
+            Map<Integer, Collection<Edge>> adjacencyMatrix,
+            Set<Integer> visited,
+            Collection<Collection<Edge>> results,
+            List<Edge> temp) {
+        visited.add(src);
+        Collection<Edge> edgesFromSrc = adjacencyMatrix.get(src);
+        for (Edge e : edgesFromSrc) {
+            int newSrc = e.n1 == src ? e.n2 : e.n1;
+            if (newSrc != dest && visited.contains(newSrc)) continue;
+            List<Edge> newTemp = new ArrayList<>(temp);
+            newTemp.add(e);
+            if (newSrc == dest) {
+                results.add(newTemp);
+                continue;
+            }
+            findShortestPaths(newSrc, dest, adjacencyMatrix, new HashSet<>(visited), results, newTemp);
+        }
     }
 
-    private static void calculateEdgeWeights(Map<Integer, Node> nodesMap) {
+    private static void calculateEdgeWeights(TaskModel model) {
+        Map<Integer, Node> nodesMap = model.nodesMap;
+        Collection<Edge> edges = model.edges;
         int maxSimilarity = nodesMap.size();
-        for (Node n : nodesMap.values()) {
-            for (Edge e : n.edgesMap.values()) {
-                if (!e.weightAssigned) {
-                    e.weight = calculateSimilarity(e.n1, e.n2, maxSimilarity);
-                    e.weightAssigned = true;
-                }
-            }
+        for (Edge e : edges) {
+            Node n1 = nodesMap.get(e.n1);
+            Node n2 = nodesMap.get(e.n2);
+            e.weight = calculateSimilarity(n1, n2, maxSimilarity);
         }
     }
 
@@ -68,39 +87,85 @@ public class GNAlgorithm {
         return maxSimilarity - (counter - 1);
     }
 
-    private static Map<Integer, Node> readInput() throws IOException {
+    private static TaskModel readInput() throws IOException {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
             String line;
             // Parse edges.
-            Map<Integer, Node> nodesMap = new HashMap<>();
+            Map<Integer, Collection<Edge>> adjacencyMatrix = new HashMap<>();
+            Collection<Edge> edges = new ArrayList<>();
             while ((line = br.readLine()) != null) {
                 if (line.isBlank()) break;
                 int[] ids = Arrays.stream(line.split("\\s+")).mapToInt(Integer::parseInt).toArray();
-                Node n1 = nodesMap.computeIfAbsent(ids[0], Node::new);
-                Node n2 = nodesMap.computeIfAbsent(ids[1], Node::new);
-                Edge e = new Edge(n1, n2);
-                IntPair pair = new IntPair(n1.id, n2.id);
-                n1.edgesMap.put(pair, e);
-                n2.edgesMap.put(pair, e);
+                Edge e = new Edge(ids[0], ids[1]);
+                edges.add(e);
+                adjacencyMatrix.compute(ids[0], (k, v) -> {
+                    if (v == null) {
+                        v = new ArrayList<>();
+                    }
+                    v.add(e);
+                    return v;
+                });
+                adjacencyMatrix.compute(ids[1], (k, v) -> {
+                    if (v == null) {
+                        v = new ArrayList<>();
+                    }
+                    v.add(e);
+                    return v;
+                });
             }
             // Parse properties vectors.
+            Map<Integer, Node> nodesMap = new HashMap<>();
             while ((line = br.readLine()) != null) {
                 if (line.isBlank()) break;
                 int[] parsedLine = Arrays.stream(line.split("\\s+")).mapToInt(Integer::parseInt).toArray();
-                nodesMap.get(parsedLine[0]).properties = Arrays.copyOfRange(parsedLine, 1, parsedLine.length);
+                Node n = new Node(parsedLine[0], Arrays.copyOfRange(parsedLine, 1, parsedLine.length));
+                nodesMap.put(n.id, n);
             }
-            return nodesMap;
+            return new TaskModel(nodesMap, adjacencyMatrix, edges);
+        }
+    }
+
+    private static class TaskModel {
+        private final Map<Integer, Node> nodesMap;
+        private final Map<Integer, Collection<Edge>> adjacencyMatrix;
+        private final Collection<Edge> edges;
+
+        private TaskModel(
+                Map<Integer, Node> nodesMap, Map<Integer,
+                Collection<Edge>> adjacencyMatrix,
+                Collection<Edge> edges) {
+            this.nodesMap = nodesMap;
+            this.adjacencyMatrix = adjacencyMatrix;
+            this.edges = edges;
         }
     }
 
     private static class Node {
         private final int id;
-        private final Map<IntPair, Edge> edgesMap;
-        private int[] properties;
+        private final int[] properties;
 
-        private Node(int id) {
+        private Node(int id, int[] properties) {
             this.id = id;
-            this.edgesMap = new HashMap<>();
+            this.properties = properties;
+        }
+    }
+
+    private static class Edge {
+        private final int n1;
+        private final int n2;
+        private int weight;
+        private double betweenness;
+
+        private Edge(int n1, int n2) {
+            this.n1 = n1;
+            this.n2 = n2;
+            weight = 1;
+            betweenness = 0;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("(%d,%d), weight=%d, betweenness=%.4f", n1, n2, weight, betweenness);
         }
     }
 
@@ -125,26 +190,10 @@ public class GNAlgorithm {
         public int hashCode() {
             return Objects.hash(v1, v2);
         }
-    }
-
-    private static class Edge {
-        private final Node n1;
-        private final Node n2;
-        private int weight;
-        private boolean weightAssigned;
-        private double betweenness;
-
-        private Edge(Node n1, Node n2) {
-            this.n1 = n1;
-            this.n2 = n2;
-            weight = 1;
-            weightAssigned = false;
-            betweenness = 0;
-        }
 
         @Override
         public String toString() {
-            return String.format("(%d,%d), weight=%d, betweenness=%.4f", n1.id, n2.id, weight, betweenness);
+            return String.format("(%d,%d)", v1, v2);
         }
     }
 
