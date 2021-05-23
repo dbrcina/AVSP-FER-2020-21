@@ -1,7 +1,7 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class GNAlgorithm {
 
@@ -16,57 +16,104 @@ public class GNAlgorithm {
         }));
     }
 
+    private static final String SPLIT_DEL = "\\s+";
+    private static final double DELTA = 1e-5;
+
     public static void main(String[] args) throws IOException {
         TaskModel model = readInput();
         calculateEdgeWeights(model);
         girvanNewman(model);
-        System.out.println();
+        try (OutputStream os = new BufferedOutputStream(System.out)) {
+            List<int[]> removedEdgesResults = model.removedEdgesResults;
+            for (int[] result : removedEdgesResults) {
+                os.write(String.format("%d %d%n", result[0], result[1]).getBytes(StandardCharsets.UTF_8));
+            }
+        }
     }
 
     private static void girvanNewman(TaskModel model) {
         Map<Integer, Node> nodesMap = model.nodesMap;
         Set<Integer> nodesIds = nodesMap.keySet();
-        Map<Integer, Collection<Edge>> adjacencyMatrix = model.adjacencyMatrix;
-        Collection<Edge> edges = model.edges;
-        Map<IntPair, Collection<Collection<Edge>>> allPathsBetweenTwoNodes = new HashMap<>();
-        for (int n1 : nodesIds) {
-            for (int n2 : nodesIds) {
-                if (n1 == n2) continue;
-                IntPair pair = new IntPair(Math.min(n1, n2), Math.max(n1, n2));
-                if (allPathsBetweenTwoNodes.containsKey(pair)) continue;
-                Collection<Collection<Edge>> results = new ArrayList<>();
-                findShortestPaths(n1, n2, adjacencyMatrix, new HashSet<>(), results, new ArrayList<>());
-                allPathsBetweenTwoNodes.put(pair, results);
+        Map<Integer, List<Edge>> adjacencyMatrix = model.adjacencyMatrix;
+        List<Edge> edges = model.edges;
+        List<int[]> removedEdgesResults = model.removedEdgesResults;
+        while (!edges.isEmpty()) {
+            for (int n1 : nodesIds) {
+                for (int n2 : nodesIds) {
+                    if (n1 == n2) continue;
+                    calculateBetweennes(n1, n2, adjacencyMatrix);
+                }
+            }
+            double maxBetweenness = edges.stream()
+                    .mapToDouble(edge -> edge.betweenness)
+                    .max()
+                    .getAsDouble();
+            List<Edge> edgesToRemove = edges.stream()
+                    .filter(edge -> Math.abs(edge.betweenness - maxBetweenness) <= DELTA)
+                    .sorted(Comparator.comparingInt(e -> ((Edge) e).n1)
+                            .thenComparingInt(e -> ((Edge) e).n2))
+                    .collect(Collectors.toList());
+            edges.removeAll(edgesToRemove);
+            for (Edge edge : edgesToRemove) {
+                adjacencyMatrix.get(edge.n1).remove(edge);
+                adjacencyMatrix.get(edge.n2).remove(edge);
+                removedEdgesResults.add(new int[]{edge.n1, edge.n2});
             }
         }
-        System.out.println();
+    }
+
+    private static void calculateBetweennes(int source, int destination, Map<Integer, List<Edge>> adjacencyMatrix) {
+        List<Edge> open = adjacencyMatrix.get(source);
+        if (open == null) return;
+        List<List<Edge>> paths = new ArrayList<>();
+        findShortestPaths(source, destination, open, new HashSet<>(), adjacencyMatrix, paths, new ArrayList<>());
+        if (paths.isEmpty()) return;
+        List<Integer> mappedPaths = paths.stream()
+                .mapToInt(path -> path.stream()
+                        .mapToInt(edge -> edge.weight)
+                        .sum())
+                .boxed()
+                .collect(Collectors.toList());
+        int minPathLength = mappedPaths.stream()
+                .min(Comparator.naturalOrder())
+                .get();
+        List<List<Edge>> filteredPaths = new ArrayList<>();
+        for (int i = 0; i < mappedPaths.size(); i++) {
+            if (mappedPaths.get(i) == minPathLength) {
+                filteredPaths.add(paths.get(i));
+            }
+        }
+        int n = filteredPaths.size();
+        filteredPaths.forEach(path -> path.forEach(edge -> edge.betweenness += 1.0 / n));
     }
 
     private static void findShortestPaths(
-            int src,
-            int dest,
-            Map<Integer, Collection<Edge>> adjacencyMatrix,
-            Set<Integer> visited,
-            Collection<Collection<Edge>> results,
+            int source,
+            int destination,
+            List<Edge> open,
+            Set<Edge> visited,
+            Map<Integer, List<Edge>> adjacencyMatrix,
+            List<List<Edge>> paths,
             List<Edge> temp) {
-        visited.add(src);
-        Collection<Edge> edgesFromSrc = adjacencyMatrix.get(src);
-        for (Edge e : edgesFromSrc) {
-            int newSrc = e.n1 == src ? e.n2 : e.n1;
-            if (newSrc != dest && visited.contains(newSrc)) continue;
+        for (Edge e : open) {
+            visited.add(e);
             List<Edge> newTemp = new ArrayList<>(temp);
             newTemp.add(e);
-            if (newSrc == dest) {
-                results.add(newTemp);
+            int newSrc = e.n1 == source ? e.n2 : e.n1;
+            if (newSrc == destination) {
+                paths.add(newTemp);
                 continue;
             }
-            findShortestPaths(newSrc, dest, adjacencyMatrix, new HashSet<>(visited), results, newTemp);
+            List<Edge> nextOpen = adjacencyMatrix.get(newSrc).stream()
+                    .filter(edge -> !open.contains(edge) && !visited.contains(edge))
+                    .collect(Collectors.toList());
+            findShortestPaths(newSrc, destination, nextOpen, new HashSet<>(visited), adjacencyMatrix, paths, newTemp);
         }
     }
 
     private static void calculateEdgeWeights(TaskModel model) {
         Map<Integer, Node> nodesMap = model.nodesMap;
-        Collection<Edge> edges = model.edges;
+        List<Edge> edges = model.edges;
         int maxSimilarity = nodesMap.size();
         for (Edge e : edges) {
             Node n1 = nodesMap.get(e.n1);
@@ -91,11 +138,13 @@ public class GNAlgorithm {
         try (BufferedReader br = new BufferedReader(new InputStreamReader(System.in))) {
             String line;
             // Parse edges.
-            Map<Integer, Collection<Edge>> adjacencyMatrix = new HashMap<>();
-            Collection<Edge> edges = new ArrayList<>();
+            Map<Integer, List<Edge>> adjacencyMatrix = new HashMap<>();
+            List<Edge> edges = new ArrayList<>();
             while ((line = br.readLine()) != null) {
                 if (line.isBlank()) break;
-                int[] ids = Arrays.stream(line.split("\\s+")).mapToInt(Integer::parseInt).toArray();
+                int[] ids = Arrays.stream(line.split(SPLIT_DEL))
+                        .mapToInt(Integer::parseInt)
+                        .toArray();
                 Edge e = new Edge(ids[0], ids[1]);
                 edges.add(e);
                 adjacencyMatrix.compute(ids[0], (k, v) -> {
@@ -117,7 +166,9 @@ public class GNAlgorithm {
             Map<Integer, Node> nodesMap = new HashMap<>();
             while ((line = br.readLine()) != null) {
                 if (line.isBlank()) break;
-                int[] parsedLine = Arrays.stream(line.split("\\s+")).mapToInt(Integer::parseInt).toArray();
+                int[] parsedLine = Arrays.stream(line.split(SPLIT_DEL))
+                        .mapToInt(Integer::parseInt)
+                        .toArray();
                 Node n = new Node(parsedLine[0], Arrays.copyOfRange(parsedLine, 1, parsedLine.length));
                 nodesMap.put(n.id, n);
             }
@@ -127,16 +178,18 @@ public class GNAlgorithm {
 
     private static class TaskModel {
         private final Map<Integer, Node> nodesMap;
-        private final Map<Integer, Collection<Edge>> adjacencyMatrix;
-        private final Collection<Edge> edges;
+        private final Map<Integer, List<Edge>> adjacencyMatrix;
+        private final List<Edge> edges;
+        private final List<int[]> removedEdgesResults;
 
         private TaskModel(
-                Map<Integer, Node> nodesMap, Map<Integer,
-                Collection<Edge>> adjacencyMatrix,
-                Collection<Edge> edges) {
+                Map<Integer, Node> nodesMap,
+                Map<Integer, List<Edge>> adjacencyMatrix,
+                List<Edge> edges) {
             this.nodesMap = nodesMap;
             this.adjacencyMatrix = adjacencyMatrix;
             this.edges = edges;
+            this.removedEdgesResults = new ArrayList<>(edges.size());
         }
     }
 
@@ -157,15 +210,17 @@ public class GNAlgorithm {
         private double betweenness;
 
         private Edge(int n1, int n2) {
-            this.n1 = n1;
-            this.n2 = n2;
+            int min = Math.min(n1, n2);
+            int max = min == n1 ? n2 : n1;
+            this.n1 = min;
+            this.n2 = max;
             weight = 1;
             betweenness = 0;
         }
 
         @Override
         public String toString() {
-            return String.format("(%d,%d), weight=%d, betweenness=%.4f", n1, n2, weight, betweenness);
+            return String.format("(%d, %d)", n1, n2);
         }
     }
 
@@ -179,6 +234,11 @@ public class GNAlgorithm {
         }
 
         @Override
+        public String toString() {
+            return String.format("(%d,%d)", v1, v2);
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (!(o instanceof IntPair)) return false;
@@ -189,11 +249,6 @@ public class GNAlgorithm {
         @Override
         public int hashCode() {
             return Objects.hash(v1, v2);
-        }
-
-        @Override
-        public String toString() {
-            return String.format("(%d,%d)", v1, v2);
         }
     }
 
