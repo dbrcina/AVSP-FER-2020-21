@@ -38,12 +38,44 @@ public class GNAlgorithm {
         List<Edge> edges = model.edges;
         List<int[]> removedEdgesResults = model.removedEdgesResults;
         while (!edges.isEmpty()) {
+//            double denominator = edges.stream()
+//                    .mapToInt(e -> e.weight)
+//                    .sum() * 2;
+//            double q = 0.0;
+//            for (int n1 : nodesIds) {
+//                List<Edge> n1Edges = adjacencyMatrix.get(n1);
+//                if (n1Edges == null) continue;
+//                int kn1 = n1Edges.stream()
+//                        .mapToInt(e -> e.weight)
+//                        .sum();
+//                for (int n2 : nodesIds) {
+//                    List<Edge> n2Edges = adjacencyMatrix.get(n2);
+//                    if (n2Edges == null) continue;
+//                    if (n2Edges.stream().noneMatch(e -> e.n1 == n1 || e.n2 == n1)) continue;
+//                    int kn2 = n2Edges.stream()
+//                            .mapToInt(e -> e.weight)
+//                            .sum();
+//                    int A = n2Edges.stream()
+//                            .filter(e -> e.n1 == n1 && e.n2 == n2 || e.n1 == n2 && e.n2 == n1)
+//                            .findFirst()
+//                            .map(edge -> edge.weight).orElse(0);
+//                    q += (A - kn1 * kn2 / denominator);
+//                }
+//            }
+//            q /= denominator;
+//            System.err.println(q);
             for (int n1 : nodesIds) {
+                List<Edge> open = adjacencyMatrix.get(n1);
+                if (open == null) continue;
+                List<List<Edge>> paths = new ArrayList<>();
+                findPaths(n1, open, new HashSet<>(), adjacencyMatrix, paths, new ArrayList<>());
                 for (int n2 : nodesIds) {
-                    if (n1 == n2) continue;
-                    calculateBetweennes(n1, n2, adjacencyMatrix);
+                    if (n1 != n2) {
+                        calculateBetweennes(n2, paths);
+                    }
                 }
             }
+            edges.forEach(e -> e.betweenness /= 2);
             double maxBetweenness = edges.stream()
                     .mapToDouble(edge -> edge.betweenness)
                     .max()
@@ -54,60 +86,67 @@ public class GNAlgorithm {
                             .thenComparingInt(e -> ((Edge) e).n2))
                     .collect(Collectors.toList());
             edges.removeAll(edgesToRemove);
-            for (Edge edge : edgesToRemove) {
-                adjacencyMatrix.get(edge.n1).remove(edge);
-                adjacencyMatrix.get(edge.n2).remove(edge);
-                removedEdgesResults.add(new int[]{edge.n1, edge.n2});
+            for (Edge e : edgesToRemove) {
+                adjacencyMatrix.get(e.n1).remove(e);
+                adjacencyMatrix.get(e.n2).remove(e);
+                removedEdgesResults.add(new int[]{e.n1, e.n2});
             }
+            edges.forEach(e -> e.betweenness = 0);
         }
     }
 
-    private static void calculateBetweennes(int source, int destination, Map<Integer, List<Edge>> adjacencyMatrix) {
-        List<Edge> open = adjacencyMatrix.get(source);
-        if (open == null) return;
-        List<List<Edge>> paths = new ArrayList<>();
-        findShortestPaths(source, destination, open, new HashSet<>(), adjacencyMatrix, paths, new ArrayList<>());
-        if (paths.isEmpty()) return;
-        List<Integer> mappedPaths = paths.stream()
+    private static void calculateBetweennes(int destination, List<List<Edge>> paths) {
+        List<List<Edge>> srcToDestinationPaths = new ArrayList<>();
+        for (List<Edge> path : paths) {
+            List<Edge> temp = new ArrayList<>();
+            for (Edge e : path) {
+                temp.add(e);
+                if (e.n1 == destination || e.n2 == destination) {
+                    if (!srcToDestinationPaths.contains(temp)) {
+                        srcToDestinationPaths.add(temp);
+                    }
+                    break;
+                }
+            }
+        }
+        if (srcToDestinationPaths.isEmpty()) return;
+        List<Integer> mappedPathsToLengths = srcToDestinationPaths.stream()
                 .mapToInt(path -> path.stream()
                         .mapToInt(edge -> edge.weight)
                         .sum())
                 .boxed()
                 .collect(Collectors.toList());
-        int minPathLength = mappedPaths.stream()
-                .min(Comparator.naturalOrder())
-                .get();
+        int minPathLength = Collections.min(mappedPathsToLengths);
         List<List<Edge>> filteredPaths = new ArrayList<>();
-        for (int i = 0; i < mappedPaths.size(); i++) {
-            if (mappedPaths.get(i) == minPathLength) {
-                filteredPaths.add(paths.get(i));
+        for (int i = 0; i < mappedPathsToLengths.size(); i++) {
+            if (mappedPathsToLengths.get(i) == minPathLength) {
+                filteredPaths.add(srcToDestinationPaths.get(i));
             }
         }
         int n = filteredPaths.size();
         filteredPaths.forEach(path -> path.forEach(edge -> edge.betweenness += 1.0 / n));
     }
 
-    private static void findShortestPaths(
-            int source,
-            int destination,
+    private static void findPaths(
+            int src,
             List<Edge> open,
-            Set<Edge> visited,
+            Set<Integer> visited,
             Map<Integer, List<Edge>> adjacencyMatrix,
             List<List<Edge>> paths,
             List<Edge> temp) {
+        if (open.isEmpty()) {
+            paths.add(temp);
+            return;
+        }
+        visited.add(src);
         for (Edge e : open) {
-            visited.add(e);
+            int newSrc = e.n1 == src ? e.n2 : e.n1;
             List<Edge> newTemp = new ArrayList<>(temp);
             newTemp.add(e);
-            int newSrc = e.n1 == source ? e.n2 : e.n1;
-            if (newSrc == destination) {
-                paths.add(newTemp);
-                continue;
-            }
             List<Edge> nextOpen = adjacencyMatrix.get(newSrc).stream()
-                    .filter(edge -> !open.contains(edge) && !visited.contains(edge))
+                    .filter(edge -> !open.contains(edge) && !visited.contains(edge.n1) && !visited.contains(edge.n2))
                     .collect(Collectors.toList());
-            findShortestPaths(newSrc, destination, nextOpen, new HashSet<>(visited), adjacencyMatrix, paths, newTemp);
+            findPaths(newSrc, nextOpen, new HashSet<>(visited), adjacencyMatrix, paths, newTemp);
         }
     }
 
@@ -220,35 +259,7 @@ public class GNAlgorithm {
 
         @Override
         public String toString() {
-            return String.format("(%d, %d)", n1, n2);
-        }
-    }
-
-    private static class IntPair {
-        private final int v1;
-        private final int v2;
-
-        private IntPair(int v1, int v2) {
-            this.v1 = v1;
-            this.v2 = v2;
-        }
-
-        @Override
-        public String toString() {
-            return String.format("(%d,%d)", v1, v2);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof IntPair)) return false;
-            IntPair intPair = (IntPair) o;
-            return v1 == intPair.v1 && v2 == intPair.v2;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(v1, v2);
+            return String.format("(%d, %d); weight=%d; betweenness=%.4f", n1, n2, weight, betweenness);
         }
     }
 
