@@ -89,11 +89,9 @@ public class GNAlgorithm {
                 Map<Integer, Integer> weightsFromN1 = A.get(n1);
                 int kn1 = weightsFromN1 == null ? 0 : weightsFromN1.values().stream().mapToInt(i -> i).sum();
                 for (int n2 : nodesIds) {
-                    if (n1 != n2) {
-                        Set<Integer> n2Community = new HashSet<>();
-                        findCommunity(n2, n2Community, adjacencyMatrix);
-                        if (!n2Community.contains(n1)) continue;
-                    }
+                    Set<Integer> n2Community = new HashSet<>();
+                    findCommunity(n2, n2Community, adjacencyMatrix);
+                    if (!n2Community.contains(n1)) continue;
                     Map<Integer, Integer> weightsFromN2 = A.get(n2);
                     int kn2 = weightsFromN2 == null ? 0 : weightsFromN2.values().stream().mapToInt(i -> i).sum();
                     int a = weightsFromN1 == null ? 0 : weightsFromN1.getOrDefault(n2, 0);
@@ -105,7 +103,6 @@ public class GNAlgorithm {
             if (Math.abs(q) < DELTA) {
                 q = 0.0;
             }
-            System.err.println(q);
             if (communities == null || q > modularity) {
                 modularity = q;
                 communities = new ArrayList<>();
@@ -119,6 +116,7 @@ public class GNAlgorithm {
                 }
                 model.communities = communities;
             }
+            edges.forEach(e -> e.betweenness = 0);
             for (int n1 : nodesIds) {
                 List<Edge> open = adjacencyMatrix.get(n1);
                 if (open == null) continue;
@@ -139,7 +137,7 @@ public class GNAlgorithm {
                     .max()
                     .getAsDouble();
             List<Edge> edgesToRemove = edges.stream()
-                    .filter(edge -> Math.abs(edge.betweenness - maxBetweenness) <= DELTA)
+                    .filter(edge -> Math.abs(edge.betweenness - maxBetweenness) < DELTA)
                     .sorted(Comparator.<Edge>comparingInt(e -> e.n1).thenComparingInt(e -> e.n2))
                     .collect(Collectors.toList());
             edges.removeAll(edgesToRemove);
@@ -152,7 +150,6 @@ public class GNAlgorithm {
                 if (n2Edges.isEmpty()) adjacencyMatrix.remove(e.n2);
                 removedEdgesResults.add(new int[]{e.n1, e.n2});
             }
-            edges.forEach(e -> e.betweenness = 0);
         }
     }
 
