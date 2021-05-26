@@ -21,6 +21,7 @@ public class GNAlgorithm {
     private static final String SPLIT_DEL = "\\s+";
     private static final double DELTA = 1e-5;
     private static final int ROUND_PLACES = 4;
+    private static final RoundingMode ROUND_MODE = RoundingMode.HALF_UP;
 
     public static void main(String[] args) throws IOException {
         TaskModel model = readInput();
@@ -57,53 +58,61 @@ public class GNAlgorithm {
         Map<Integer, List<Edge>> adjacencyMatrix = model.adjacencyMatrix;
         List<Edge> edges = model.edges;
         List<int[]> removedEdgesResults = model.removedEdgesResults;
+        Map<Integer, Map<Integer, Integer>> A = new HashMap<>();
+        for (Edge e : edges) {
+            int n1 = e.n1;
+            int n2 = e.n2;
+            int weight = e.weight;
+            A.compute(n1, (k, v) -> {
+                if (v == null) {
+                    v = new HashMap<>();
+                }
+                v.put(n2, weight);
+                return v;
+            });
+            A.compute(n2, (k, v) -> {
+                if (v == null) {
+                    v = new HashMap<>();
+                }
+                v.put(n1, weight);
+                return v;
+            });
+        }
         double modularity = 0.0;
         List<List<Integer>> communities = null;
+        double denominator = edges.stream()
+                .mapToInt(e -> e.weight)
+                .sum() * 2;
         while (!edges.isEmpty()) {
-            double denominator = edges.stream()
-                    .mapToInt(e -> e.weight)
-                    .sum() * 2;
             double q = 0.0;
             for (int n1 : nodesIds) {
-                List<Edge> n1Edges = adjacencyMatrix.get(n1);
-                if (n1Edges == null) continue;
-                int kn1 = n1Edges.stream()
-                        .mapToInt(e -> e.weight)
-                        .sum();
+                Map<Integer, Integer> weightsFromN1 = A.get(n1);
+                int kn1 = weightsFromN1 == null ? 0 : weightsFromN1.values().stream().mapToInt(i -> i).sum();
                 for (int n2 : nodesIds) {
-                    List<Edge> n2Edges = adjacencyMatrix.get(n2);
-                    if (n2Edges == null) continue;
-                    Set<Integer> n2Community = new HashSet<>();
-                    findCommunity(n2, n2Community, adjacencyMatrix);
-                    if (!n2Community.contains(n1)) continue;
-                    int kn2 = n2Edges.stream()
-                            .mapToInt(e -> e.weight)
-                            .sum();
-                    int A = n2Edges.stream()
-                            .filter(e -> e.n1 == n1 && e.n2 == n2 || e.n1 == n2 && e.n2 == n1)
-                            .findFirst()
-                            .map(edge -> edge.weight).orElse(0);
-                    q += (A - kn1 * kn2 / denominator);
+                    if (n1 != n2) {
+                        Set<Integer> n2Community = new HashSet<>();
+                        findCommunity(n2, n2Community, adjacencyMatrix);
+                        if (!n2Community.contains(n1)) continue;
+                    }
+                    Map<Integer, Integer> weightsFromN2 = A.get(n2);
+                    int kn2 = weightsFromN2 == null ? 0 : weightsFromN2.values().stream().mapToInt(i -> i).sum();
+                    int a = weightsFromN1 == null ? 0 : weightsFromN1.getOrDefault(n2, 0);
+                    q += (a - kn1 * kn2 / denominator);
                 }
             }
             q /= denominator;
-            q = new BigDecimal(q).setScale(ROUND_PLACES, RoundingMode.HALF_UP).doubleValue();
-            if (Math.abs(q) <= DELTA) {
+            q = new BigDecimal(q).setScale(ROUND_PLACES, ROUND_MODE).doubleValue();
+            if (Math.abs(q) < DELTA) {
                 q = 0.0;
             }
-            if (communities == null || q >= modularity) {
+            System.err.println(q);
+            if (communities == null || q > modularity) {
                 modularity = q;
                 communities = new ArrayList<>();
                 for (int node : nodesIds) {
-                    List<Integer> community = new ArrayList<>();
-                    List<Edge> nodeEdges = adjacencyMatrix.get(node);
-                    if (nodeEdges == null) {
-                        community.add(node);
-                    } else {
-                        Set<Integer> communitySet = new TreeSet<>();
-                        findCommunity(node, communitySet, adjacencyMatrix);
-                        community.addAll(communitySet);
-                    }
+                    Set<Integer> communitySet = new TreeSet<>();
+                    findCommunity(node, communitySet, adjacencyMatrix);
+                    List<Integer> community = new ArrayList<>(communitySet);
                     if (!communities.contains(community)) {
                         communities.add(community);
                     }
@@ -122,7 +131,7 @@ public class GNAlgorithm {
                 }
             }
             edges.forEach(e -> e.betweenness = new BigDecimal(e.betweenness / 2)
-                    .setScale(ROUND_PLACES, RoundingMode.HALF_UP)
+                    .setScale(ROUND_PLACES, ROUND_MODE)
                     .doubleValue()
             );
             double maxBetweenness = edges.stream()
@@ -148,8 +157,9 @@ public class GNAlgorithm {
     }
 
     private static void findCommunity(int node, Set<Integer> community, Map<Integer, List<Edge>> adjacencyMatrix) {
-        if (!community.add(node)) return;
-        for (Edge edge : adjacencyMatrix.get(node)) {
+        List<Edge> edges = adjacencyMatrix.get(node);
+        if (!community.add(node) || edges == null) return;
+        for (Edge edge : edges) {
             int newNode = edge.n1 == node ? edge.n2 : edge.n1;
             findCommunity(newNode, community, adjacencyMatrix);
         }
@@ -186,7 +196,7 @@ public class GNAlgorithm {
         int n = filteredPaths.size();
         filteredPaths.forEach(path -> path.forEach(edge -> {
             BigDecimal bd = new BigDecimal(edge.betweenness + 1.0 / n);
-            bd = bd.setScale(ROUND_PLACES, RoundingMode.HALF_UP);
+            bd = bd.setScale(ROUND_PLACES, ROUND_MODE);
             edge.betweenness = bd.doubleValue();
         }));
     }
