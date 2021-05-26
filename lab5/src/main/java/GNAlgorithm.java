@@ -73,11 +73,9 @@ public class GNAlgorithm {
                 for (int n2 : nodesIds) {
                     List<Edge> n2Edges = adjacencyMatrix.get(n2);
                     if (n2Edges == null) continue;
-                    if (n1 != n2) {
-                        Set<Integer> n2Community = new HashSet<>();
-                        findCommunity(n2, n2Community, adjacencyMatrix);
-                        if (!n2Community.contains(n1)) continue;
-                    }
+                    Set<Integer> n2Community = new HashSet<>();
+                    findCommunity(n2, n2Community, adjacencyMatrix);
+                    if (!n2Community.contains(n1)) continue;
                     int kn2 = n2Edges.stream()
                             .mapToInt(e -> e.weight)
                             .sum();
@@ -137,8 +135,12 @@ public class GNAlgorithm {
                     .collect(Collectors.toList());
             edges.removeAll(edgesToRemove);
             for (Edge e : edgesToRemove) {
-                adjacencyMatrix.get(e.n1).remove(e);
-                adjacencyMatrix.get(e.n2).remove(e);
+                List<Edge> n1Edges = adjacencyMatrix.get(e.n1);
+                n1Edges.remove(e);
+                if (n1Edges.isEmpty()) adjacencyMatrix.remove(e.n1);
+                List<Edge> n2Edges = adjacencyMatrix.get(e.n2);
+                n2Edges.remove(e);
+                if (n2Edges.isEmpty()) adjacencyMatrix.remove(e.n2);
                 removedEdgesResults.add(new int[]{e.n1, e.n2});
             }
             edges.forEach(e -> e.betweenness = 0);
